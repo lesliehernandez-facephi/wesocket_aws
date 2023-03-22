@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"context"
+	"log"
 	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -14,6 +15,7 @@ import (
 func DataBaseDyanmodb(cxt context.Context) (*dynamodb.Client, error) {
 
 	aws, err := config.LoadDefaultConfig(cxt, config.WithRegion(os.Getenv("AWS_REGION")))
+	log.Printf("New instance Dynamo storage [%s]")
 
 	if err != nil {
 		return nil, err
