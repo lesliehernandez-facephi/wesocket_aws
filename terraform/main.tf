@@ -116,14 +116,14 @@ resource "aws_iam_role" "examplego" {
 #                                                  #
 # Se crea la funcion Lambda para                   #
 ####################################################
-resource "null_resource" "function_binary" {
-  provisioner "local-exec" {
-    command = "GOOS=linux GOARCH=amd64 go build -o ../main ../main.go"
-  }
-}
-
+# resource "null_resource" "function_binary" {
+#   provisioner "local-exec" {
+#     command = "GOOS=linux GOARCH=amd64 go build -o ../main ../main.go"
+#   }
+# }
+# aqui es donde se guarda el fichero .zip
 data "archive_file" "zip" {    
-    depends_on = [null_resource.function_binary]
+    # depends_on = [null_resource.function_binary]
     type        = "zip"
     source_file = "../main"
     output_path = "../main.zip"
@@ -137,7 +137,7 @@ resource "aws_lambda_function" "ws_go_chat" {
     handler           = "main"
     role              = aws_iam_role.examplego.arn
     source_code_hash = "data.archive_file.zip.output_base64sha256"
-    #source_code_hash  = sha256(filebase64("../main.zip"))
+    # source_code_hash  = sha256(filebase64("../main.zip"))
     memory_size       = 128
     timeout           = 10
 }
@@ -203,6 +203,7 @@ resource "aws_apigatewayv2_route" "ws_ping_route" {
   route_key = "PING"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_main.id}"
 }
+
 ################################
 resource "aws_apigatewayv2_route" "ws_message_route" {
   api_id    = aws_apigatewayv2_api.websocket_go.id

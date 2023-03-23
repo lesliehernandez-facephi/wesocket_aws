@@ -39,3 +39,8 @@ func Handler(ctx context.Context, event events.APIGatewayWebsocketProxyRequest) 
 func main() {
 	lambda.Start(Handler)
 }
+
+// {
+//     "action": "MESSAGE",
+//     "text": "hello, world!"
+// }
