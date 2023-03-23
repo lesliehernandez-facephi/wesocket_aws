@@ -11,7 +11,7 @@
 
         <script>
             const ws = new WebSocket(
-                ''
+                'wss://t0a68a5ffe.execute-api.eu-west-2.amazonaws.com/ws_primary'
             );
             ws.onopen = () => console.log('opened');
             ws.onclose = () => console.log('closed');
@@ -23,7 +23,7 @@
                 };
 
                 ws.send(JSON.stringify(message));
-            }, 60000);
+            }, 20000);
 
             document.getElementById('sendMessage').onclick = () => {
                 const message = {

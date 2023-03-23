@@ -5,23 +5,23 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
+	_ "time"
 
-	"github.com/lesliehernandez-facephi/wesocket_aws/internal/helpers"
+	_ "github.com/lesliehernandez-facephi/wesocket_aws/internal/helpers"
 	"github.com/lesliehernandez-facephi/wesocket_aws/internal/model"
 
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	_ "github.com/aws/aws-sdk-go-v2/aws"
+	_ "github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	_ "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
 func Ping(ctx context.Context, event events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	log.Printf("ping a mensajes")
 
 	const pongActions = "PONG"
-	svc, erres := helpers.DataBaseDyanmodb(ctx)
-	if erres != nil {
+	//svc, erres := helpers.DataBaseDyanmodb(ctx)
+	/*if erres != nil {
 		return events.APIGatewayProxyResponse{}, erres
 	}
 
@@ -37,9 +37,9 @@ func Ping(ctx context.Context, event events.APIGatewayWebsocketProxyRequest) (ev
 		TableName: aws.String("ws_messeger_table"),
 		Item:      item,
 	}
-	if _, erres = svc.PutItem(ctx, input); erres != nil {
+	/*if _, erres = svc.PutItem(ctx, input); erres != nil {
 		return events.APIGatewayProxyResponse{}, erres
-	}
+	}*/
 
 	response := model.Response[model.PongResponsePayload]{
 		Action:   pongActions,

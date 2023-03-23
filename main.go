@@ -30,7 +30,7 @@ func Handler(ctx context.Context, event events.APIGatewayWebsocketProxyRequest) 
 	case "MESSAGE":
 		return handler.Messages(ctx, event)
 	default:
-		return events.APIGatewayProxyResponse{Body: "no handler", StatusCode: 200}, nil
+		return events.APIGatewayProxyResponse{Body: "no handler" + string(content), StatusCode: 200}, nil
 
 	}
 
