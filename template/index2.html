@@ -20,9 +20,15 @@
 </head>
 <body>
 
-	<div id="messages"></div>
-	<input type="text" id="message-input" />
-	<button onclick="sendMessage()">Send</button>
+	<div id="messages">
+        
+       
+    </div>
+    <div>
+        <label>Nombre: <input type="text" id="names"></label> <br><br>
+        <label>Mensaje: <input type="text" id="message-input" /></label>
+        <button onclick="sendMessage()">Send</button>
+    </div>
 
 	<script>
 		const socket = new WebSocket(' wss://j64hegsyp3.execute-api.eu-west-2.amazonaws.com/ws_primary');
@@ -31,14 +37,29 @@
 		}
 
 		socket.onmessage = (event) => {
-
+            const userName = document.getElementById('names');
+            const nameUser = userName.value.trim();
+            console.log(nameUser);
 			console.log('Message received');
 			console.log(event);
 			const messages = document.getElementById('messages');
             console.log("messsages recibie: ", messages);
-			const messageData = event.data;
-            console.log( "datamessages recibo: ",messageData);
-			messages.innerHTML = messages.innerHTML + `<p><strong>${messageData}</strong>: ${messageData}</p>`;
+
+			const messageData =  event.data;
+            try {
+                var parseData = JSON.parse('messageData')
+            } catch (error) {
+                parseData = "texto"
+            }
+            console.log("messagesData12:  ", messageData);
+            if (typeof(parseData)==="object") {
+                messages.innerHTML = ""  
+                console.log("en tra en el if");
+            } else {
+                messages.innerHTML = messages.innerHTML + `<p><strong>${nameUser}</strong>: ${messageData}</p>`;
+                console.log("en tra en el else ");
+
+            }
 		}
 
 		socket.onerror = (event) => {
