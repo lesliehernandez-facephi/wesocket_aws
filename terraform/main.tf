@@ -53,7 +53,7 @@ data "aws_iam_policy_document" "ws_lambda_policy_document" {
       "execute-api:*",
     ]
     effect   = "Allow"
-    resource = [
+    resources = [
       "${aws_apigatewayv2_stage.lambda_stage.execution_arn}/*/*/*"
     ] 
   }
@@ -72,7 +72,7 @@ data  "aws_iam_policy_document" "ws_messeger_apigateway_policy" {
       "lambda:InvokeFunction",
     ]
     effect   = "Allow"
-    resource = [aws_lambda_function.ws_go_chat.arn]
+    resources = [aws_lambda_function.ws_go_chat.arn]
   }
 }
 

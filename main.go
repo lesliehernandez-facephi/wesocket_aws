@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/apigatewaymanagementapi"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
+	"go.uber.org/zap"
 )
 
 // structure representing the connections table
@@ -21,10 +22,23 @@ type connection struct {
 	ConnectionID string
 }
 
+var Loggers *zap.Logger
+
+func InitializeLogger() {
+	Loggers, _ = zap.NewProduction()
+
+}
+
 func handleRequest(ctx context.Context, request events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
+	InitializeLogger()
 	switch route := request.RequestContext.RouteKey; route {
+
 	case "$connect":
+		Loggers.Info("hello ", zap.String("body: ", request.Body))
+
+		log.Println(ctx)
 		return doConnect(ctx, request)
+
 	case "sendmessage":
 		return doSendmessage(ctx, request)
 	case "$disconnect":
@@ -32,6 +46,7 @@ func handleRequest(ctx context.Context, request events.APIGatewayWebsocketProxyR
 	default:
 		return handleError("unexepcted route: " + route)
 	}
+
 }
 
 func doConnect(ctx context.Context, request events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -43,6 +58,7 @@ func doConnect(ctx context.Context, request events.APIGatewayWebsocketProxyReque
 	if err != nil {
 		return handleError("failed to establish aws session: " + err.Error())
 	}
+	log.Println("session: ", session)
 	dbSvc := dynamodb.New(session)
 
 	av, err := dynamodbattribute.MarshalMap(&connection{ConnectionID: cID})
@@ -74,11 +90,14 @@ func doSendmessage(ctx context.Context, request events.APIGatewayWebsocketProxyR
 		return handleError(label + "failed to unmarshal body: " + err.Error())
 	}
 
+	log.Println("msg  ", msg)
 	log.Println("msg ", msg.Message)
 	log.Println("msg Data ", msg.Data)
 
 	endurl := os.Getenv("API_GATEWAY_ENDPOINT")
 	apigw := apigatewaymanagementapi.New(session, aws.NewConfig().WithEndpoint(endurl))
+
+	log.Println("mapis ", apigw)
 
 	dbSvc := dynamodb.New(session)
 	result, err := dbSvc.Scan(&dynamodb.ScanInput{TableName: aws.String(os.Getenv("DYNAMODB_TABLE"))})
@@ -93,7 +112,8 @@ func doSendmessage(ctx context.Context, request events.APIGatewayWebsocketProxyR
 
 	for _, c := range conList {
 		log.Println(label, "posting to cid: ", c.ConnectionID)
-		_, err = apigw.PostToConnection(&apigatewaymanagementapi.PostToConnectionInput{ConnectionId: &c.ConnectionID, Data: []byte(msg.Data)})
+		_, err = apigw.PostToConnection(&apigatewaymanagementapi.PostToConnectionInput{ConnectionId: &c.ConnectionID, Data: []byte(msg.Message)})
+
 		// log.Printf(apigw) ver esto con mas detalle
 		if err != nil {
 			aerr, ok := err.(awserr.Error)
