@@ -48,16 +48,15 @@ data "aws_iam_policy_document" "ws_lambda_policy_document" {
   }
 
 # declaración permite que la función Lambda ejecute API en API Gateway
-#   statement {
-#     actions = [
-#       "execute-api:*",
-#     ]
-#     effect   = "Allow"
-#     resource = [
-#       "${aws_apigatewayv2_stage.ws_messenger_api_stage.execution_arn}/*/*/*"
-#     ] 
-#   }
-
+  statement {
+    actions = [
+      "execute-api:*",
+    ]
+    effect   = "Allow"
+    resource = [
+      "${aws_apigatewayv2_stage.lambda_stage.execution_arn}/*/*/*"
+    ] 
+  }
 }
 
 resource "aws_iam_policy" "ws_lambda_policy" {
@@ -67,15 +66,15 @@ resource "aws_iam_policy" "ws_lambda_policy" {
 }
 
 
-# data  "aws_iam_policy_document" "ws_messeger_apigateway_policy" {
-#   statement {
-#     actions = [
-#       "lambda:InvokeFunction",
-#     ]
-#     effect   = "Allow"
-#     resource = [aws_lambda_function.ws_lambda_messeger.arn]
-#   }
-# }
+data  "aws_iam_policy_document" "ws_messeger_apigateway_policy" {
+  statement {
+    actions = [
+      "lambda:InvokeFunction",
+    ]
+    effect   = "Allow"
+    resource = [aws_lambda_function.ws_go_chat.arn]
+  }
+}
 
 
 # ##############################################################
@@ -123,14 +122,14 @@ resource "aws_iam_role" "examplego" {
 #                                                  #
 # Se crea la funcion Lambda para                   #
 ####################################################
-resource "null_resource" "function_binary" {
-  provisioner "local-exec" {
-    command = "GOOS=linux GOARCH=amd64 go build -o ../main ../main.go"
-  }
-}
+# resource "null_resource" "function_binary" {
+#   provisioner "local-exec" {
+#     command = "GOOS=linux GOARCH=amd64 go build -o ../main ../main.go"
+#   }
+# }
 
 data "archive_file" "zip" {    
-    depends_on = [null_resource.function_binary]
+    # depends_on = [null_resource.function_binary]
     type        = "zip"
     source_file = "../main"
     output_path = "../main.zip"
@@ -144,10 +143,10 @@ resource "aws_lambda_function" "ws_go_chat" {
     handler           = "main"
     role              = aws_iam_role.examplego.arn
     source_code_hash = "data.archive_file.zip.output_base64sha256"
-    #source_code_hash  = sha256(filebase64("../main.zip"))
+    # source_code_hash  = sha256(filebase64("../main.zip"))
     environment {
       variables = {
-        "API_GATEWAY_ENDPOINT" = "https://${aws_apigatewayv2_api.websocket_go.id}.execute-api.eu-west-2.amazonaws.com/${aws_apigatewayv2_stage.lambda.id}"
+        "API_GATEWAY_ENDPOINT" = "https://${aws_apigatewayv2_api.websocket_go.id}.execute-api.eu-west-2.amazonaws.com/${aws_apigatewayv2_stage.lambda_stage.id}"
         "DYNAMODB_TABLE"       = aws_dynamodb_table.ws_table.id
       }
     }

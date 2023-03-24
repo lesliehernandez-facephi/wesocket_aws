@@ -8,8 +8,6 @@
 # ahi es donde genera el enrutamiento
 ####################################################
 
-
-
 # la aws_apigatewayv2_integration es para estar atento a los servicios que se solicita 
 resource "aws_apigatewayv2_integration" "lambda_main" {
   api_id             = aws_apigatewayv2_api.websocket_go.id
@@ -23,7 +21,7 @@ resource "aws_apigatewayv2_integration" "lambda_main" {
 
 ##############################
 # # ahora vamos hacer una implementacion "real" 
-resource "aws_apigatewayv2_stage" "lambda" {
+resource "aws_apigatewayv2_stage" "lambda_stage" {
   api_id      = aws_apigatewayv2_api.websocket_go.id
   name        = "ws_primary"
   auto_deploy = true
@@ -57,15 +55,15 @@ resource "aws_apigatewayv2_route" "ws_default" {
   target    = "integrations/${aws_apigatewayv2_integration.lambda_main.id}"
 }
 
-resource "aws_apigatewayv2_route" "ws_ping_route" {
-  api_id    = aws_apigatewayv2_api.websocket_go.id
-  route_key = "PING"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_main.id}"
-}
+# resource "aws_apigatewayv2_route" "ws_ping_route" {
+#   api_id    = aws_apigatewayv2_api.websocket_go.id
+#   route_key = "PING"
+#   target    = "integrations/${aws_apigatewayv2_integration.lambda_main.id}"
+# }
 ################################
 resource "aws_apigatewayv2_route" "ws_message_route" {
   api_id    = aws_apigatewayv2_api.websocket_go.id
-  route_key = "MESSAGE"
+  route_key = "sendmessage"
   target    = "integrations/${aws_apigatewayv2_integration.lambda_main.id}"
 }
 
@@ -87,11 +85,11 @@ resource "aws_apigatewayv2_route_response" "ws_disconnect_route_response" {
   route_response_key = "$default"
 }
 
-resource "aws_apigatewayv2_route_response" "ws_ping_route_response" {
-  api_id             = aws_apigatewayv2_api.websocket_go.id
-  route_id           = aws_apigatewayv2_route.ws_ping_route.id
-  route_response_key = "$default"
-}
+# resource "aws_apigatewayv2_route_response" "ws_ping_route_response" {
+#   api_id             = aws_apigatewayv2_api.websocket_go.id
+#   route_id           = aws_apigatewayv2_route.ws_ping_route.id
+#   route_response_key = "$default"
+# }
 
 resource "aws_apigatewayv2_route_response" "ws_message_route_response" {
   api_id             = aws_apigatewayv2_api.websocket_go.id
