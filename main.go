@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
-	"log"
 	"os"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -17,151 +15,170 @@ import (
 	"go.uber.org/zap"
 )
 
-// structure representing the connections table
-type connection struct {
+// Inicialización de logs
+var Loggers, _ = zap.NewProduction()
+
+// Estructura para almacenar IDs de conexión en DynamoDB
+type Connection struct {
 	ConnectionID string
 }
 
-var Loggers *zap.Logger
-
-func InitializeLogger() {
-	Loggers, _ = zap.NewProduction()
-
+// Estructuras para enviar mensajes
+type Payload struct {
+	Username string `json:"username"`
+	Message  string `json:"message"`
+}
+type Body struct {
+	Action  string  `json:"action"`
+	Payload Payload `json:"payload"`
 }
 
-func handleRequest(ctx context.Context, request events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
-	InitializeLogger()
+func handleRequest(request events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
+	var response events.APIGatewayProxyResponse
+
 	switch route := request.RequestContext.RouteKey; route {
-
 	case "$connect":
-		Loggers.Info("hello ", zap.String("body: ", request.Body))
-
-		log.Println(ctx)
-		return doConnect(ctx, request)
-
+		Loggers.Info("$connect ", zap.String("body: ", request.Body))
+		response = doConnect(request.RequestContext.ConnectionID)
 	case "sendmessage":
-		return doSendmessage(ctx, request)
+		Loggers.Info("sendmessage", zap.String("body: ", request.Body))
+		response = doSendMessage(request.Body)
 	case "$disconnect":
-		return doDisconnect(ctx, request)
+		Loggers.Info("$disconnect", zap.String("body: ", request.Body))
+		response = doDisconnect(request.RequestContext.ConnectionID, request.Body)
 	default:
-		return handleError("unexepcted route: " + route)
+		Loggers.Error(route, zap.String("body: ", request.Body))
+		response = events.APIGatewayProxyResponse{Body: "Invalid route: " + route, StatusCode: 400}
 	}
 
+	Loggers.Info("response", zap.String("body: ", response.Body))
+	return response, nil
 }
 
-func doConnect(ctx context.Context, request events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
+func doConnect(connectionID string) events.APIGatewayProxyResponse {
 	label := "doConnect: "
-	cID := request.RequestContext.ConnectionID
-	log.Println(label, "cID: ", cID)
+	Loggers.Info(label + "connectionID: " + connectionID)
 
-	session, err := session.NewSession()
+	newSession, err := session.NewSession()
+
 	if err != nil {
-		return handleError("failed to establish aws session: " + err.Error())
+		return events.APIGatewayProxyResponse{Body: "Failed establishing AWS session: " + err.Error(), StatusCode: 500}
 	}
-	log.Println("session: ", session)
-	dbSvc := dynamodb.New(session)
 
-	av, err := dynamodbattribute.MarshalMap(&connection{ConnectionID: cID})
+	dbSvc := dynamodb.New(newSession)
+
+	av, err := dynamodbattribute.MarshalMap(&Connection{ConnectionID: connectionID})
+
 	if err != nil {
-		return handleError(label + "failed to marshal item: " + err.Error())
+		return events.APIGatewayProxyResponse{Body: "Failed marshalling DynamoDB item: " + err.Error(), StatusCode: 500}
 	}
 
-	if _, err = dbSvc.PutItem(&dynamodb.PutItemInput{Item: av, TableName: aws.String(os.Getenv("DYNAMODB_TABLE"))}); err != nil {
-		return handleError(label + "connectionid: putitem failed: " + err.Error())
+	tableName := os.Getenv("DYNAMODB_TABLE")
+	Loggers.Info(label + "tableName: " + tableName)
+
+	_, err = dbSvc.PutItem(&dynamodb.PutItemInput{Item: av, TableName: aws.String(tableName)})
+
+	if err != nil {
+		return events.APIGatewayProxyResponse{Body: "Failed putting DynamoDB item in table '" + tableName + "': " + err.Error(), StatusCode: 500}
 	}
-	return events.APIGatewayProxyResponse{Body: request.Body, StatusCode: 200}, nil
+
+	return events.APIGatewayProxyResponse{Body: connectionID, StatusCode: 200}
 }
 
-func doSendmessage(ctx context.Context, request events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
-	label := "doSendmessage: "
-	session, err := session.NewSession()
+func doSendMessage(body string) events.APIGatewayProxyResponse {
+	label := "doSendMessage: "
+	newSession, err := session.NewSession()
+
 	if err != nil {
-		return handleError(label + "failed to establish aws session: " + err.Error())
+		return events.APIGatewayProxyResponse{Body: "Failed establishing AWS session: " + err.Error(), StatusCode: 500}
 	}
 
-	log.Println(label, "body: ", request.Body)
+	msg := Body{}
 
-	type message struct {
-		Message string
-		Data    string
-	}
-	msg := message{}
-	if err = json.Unmarshal([]byte(request.Body), &msg); err != nil {
-		return handleError(label + "failed to unmarshal body: " + err.Error())
-	}
+	err = json.Unmarshal([]byte(body), &msg)
 
-	log.Println("msg  ", msg)
-	log.Println("msg ", msg.Message)
-	log.Println("msg Data ", msg.Data)
-
-	endurl := os.Getenv("API_GATEWAY_ENDPOINT")
-	apigw := apigatewaymanagementapi.New(session, aws.NewConfig().WithEndpoint(endurl))
-
-	log.Println("mapis ", apigw)
-
-	dbSvc := dynamodb.New(session)
-	result, err := dbSvc.Scan(&dynamodb.ScanInput{TableName: aws.String(os.Getenv("DYNAMODB_TABLE"))})
 	if err != nil {
-		return handleError(label + "dynamodb.Scan(ConnectionID) failed: " + err.Error())
+		return events.APIGatewayProxyResponse{Body: "Failed unmarshalling body message: " + err.Error(), StatusCode: 500}
 	}
 
-	conList := make([]connection, *result.Count)
-	if err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &conList); err != nil {
-		return handleError(label + "UnmarshalListOfMaps() failed: " + err.Error())
+	Loggers.Info(label + "Body: " + body)
+	Loggers.Info(label + "Message.Action: " + msg.Action)
+
+	endUrl := os.Getenv("API_GATEWAY_ENDPOINT")
+	tableName := os.Getenv("DYNAMODB_TABLE")
+	apiGw := apigatewaymanagementapi.New(newSession, aws.NewConfig().WithEndpoint(endUrl))
+	dbSvc := dynamodb.New(newSession)
+
+	result, err := dbSvc.Scan(&dynamodb.ScanInput{TableName: aws.String(tableName)})
+
+	if err != nil {
+		return events.APIGatewayProxyResponse{Body: "Failed scanning DynamoDB table '" + tableName + "': " + err.Error(), StatusCode: 500}
 	}
 
-	for _, c := range conList {
-		log.Println(label, "posting to cid: ", c.ConnectionID)
-		_, err = apigw.PostToConnection(&apigatewaymanagementapi.PostToConnectionInput{ConnectionId: &c.ConnectionID, Data: []byte(msg.Message)})
+	connectionIds := make([]Connection, *result.Count)
+	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &connectionIds)
 
-		// log.Printf(apigw) ver esto con mas detalle
+	if err != nil {
+		return events.APIGatewayProxyResponse{Body: "Failed unmarshalling connection IDs: " + err.Error(), StatusCode: 500}
+	}
+
+	for _, c := range connectionIds {
+		Loggers.Info(label + "Posting to connection ID: " + c.ConnectionID)
+
+		payload, err := json.Marshal(msg.Payload)
+
 		if err != nil {
-			aerr, ok := err.(awserr.Error)
-			if ok && aerr.Code() == apigatewaymanagementapi.ErrCodeGoneException {
-				if err = deleteConnection(c.ConnectionID); err != nil {
-					return handleError(label + "deleteConnection() failed: " + err.Error())
+			return events.APIGatewayProxyResponse{Body: "Failed marshalling payload: " + err.Error(), StatusCode: 500}
+		}
+
+		_, err = apiGw.PostToConnection(&apigatewaymanagementapi.PostToConnectionInput{ConnectionId: &c.ConnectionID, Data: payload})
+
+		if err != nil {
+			// El error puede ser que el usuario se ha desconectado, en ese caso habría que eliminarlo
+			// En cualquier otro caso, detenerse y devolver error
+			answerError, ok := err.(awserr.Error)
+
+			if ok && answerError.Code() == apigatewaymanagementapi.ErrCodeGoneException {
+				err = deleteConnection(c.ConnectionID)
+				if err != nil {
+					return events.APIGatewayProxyResponse{Body: "Error deleting connection ID '" + c.ConnectionID + "' in DynamoDB: " + err.Error(), StatusCode: 500}
 				}
 			} else {
-				log.Println(label, "Error: PostToConnection() failed: ", err.Error())
+				return events.APIGatewayProxyResponse{Body: "Error posting message to connection ID '" + c.ConnectionID + "'" + err.Error(), StatusCode: 500}
 			}
 		}
 	}
-	return events.APIGatewayProxyResponse{Body: request.Body, StatusCode: 200}, nil
+
+	return events.APIGatewayProxyResponse{Body: "{}", StatusCode: 200}
 }
 
-func doDisconnect(ctx context.Context, request events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
-	if err := deleteConnection(request.RequestContext.ConnectionID); err != nil {
-		return handleError("doDisconnect: deleteConnection() failed: " + err.Error())
+func doDisconnect(connectionID string, body string) events.APIGatewayProxyResponse {
+	err := deleteConnection(connectionID)
+
+	if err != nil {
+		return events.APIGatewayProxyResponse{Body: "Error deleting connection ID '" + connectionID + "' in DynamoDB: " + err.Error(), StatusCode: 500}
 	}
-	return events.APIGatewayProxyResponse{Body: request.Body, StatusCode: 200}, nil
+
+	return events.APIGatewayProxyResponse{Body: body, StatusCode: 200}
 }
 
-//
-// Local helper functions
-//
+func deleteConnection(connectionID string) error {
+	Loggers.Info("deleteConnection: connection ID: " + connectionID)
 
-// General error logger and return payload builder
-func handleError(message string) (events.APIGatewayProxyResponse, error) {
-	emsg := "Error: " + message
-	log.Println(emsg)
-	return events.APIGatewayProxyResponse{Body: emsg, StatusCode: 500}, nil
-}
+	tableName := os.Getenv("DYNAMODB_TABLE")
+	newSession, err := session.NewSession()
 
-// Remove connections from the connections_table.
-func deleteConnection(cID string) error {
-	log.Println("deleteConnection: cID=", cID)
-	session, err := session.NewSession()
 	if err != nil {
 		return err
 	}
 
-	dbSvc := dynamodb.New(session)
+	dbSvc := dynamodb.New(newSession)
 	delIn := &dynamodb.DeleteItemInput{
 		Key: map[string]*dynamodb.AttributeValue{
-			"ConnectionID": {S: aws.String(cID)},
+			"ConnectionID": {S: aws.String(connectionID)},
 		},
 		// ReturnValues: aws.String("ALL_OLD"),
-		TableName: aws.String(os.Getenv("DYNAMODB_TABLE")),
+		TableName: aws.String(tableName),
 	}
 	if _, err := dbSvc.DeleteItem(delIn); err != nil {
 		return err

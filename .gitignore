@@ -66,3 +66,5 @@ terraform.rc
 build/
 
 .DS_Store
+.idea/
+

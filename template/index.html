@@ -7,36 +7,72 @@
         <title>Document</title>
     </head>
     <body>
-        <button id="sendMessage">Send Message</button>
+        <div>
+            <input id="username-input" type="text" class="form-control input-sm" placeholder="User name" value="ericka"/>
+            <input id="message-input"  type="text" class="form-control input-sm" placeholder="Message" />
+            <button id="send-message">Send Message</button>
+
+            <div class="chat-panel panel panel-default">
+                <div class="panel-body">
+                    <ul id="chat">
+                        <li id="masterLi">
+                            <div class="header">
+                                <strong class="primary-font"></strong>
+                                <small class="pull-right text-muted">
+                                    <i class="fa fa-clock-o fa-fw"></i><k></k>
+                                </small>
+                            </div>
+                            <p></p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
 
         <script>
-            const ws = new WebSocket(
-                'wss://t0a68a5ffe.execute-api.eu-west-2.amazonaws.com/ws_primary'
-            );
-            ws.onopen = () => console.log('opened');
-            ws.onclose = () => console.log('closed');
+            let counter = 0;
+            const masterLi = document.getElementById('masterLi');
+            const usernameInput = document.getElementById('username-input');
+            const messageInput = document.getElementById('message-input');
+            const chat = document.getElementById('chat');
 
-            setInterval(() => {
-                const message = {
-                    action: 'PING',
-                    payload: {},
-                };
+            const writeMessage = (username, message) => {
+                const newLi = masterLi.cloneNode(true);
+                newLi.id = 'li_' + ++counter;
+                newLi.getElementsByTagName('p')[0].textContent = message
+                newLi.getElementsByTagName('k')[0].textContent = new Date().toString();
+                newLi.getElementsByTagName('strong')[0].textContent = username;
+                chat.appendChild(newLi);
+            }
 
-                ws.send(JSON.stringify(message));
-            }, 20000);
+            document.getElementById('send-message').onclick = () => {
+                const username = usernameInput.value;
+                const message = messageInput.value;
 
-            document.getElementById('sendMessage').onclick = () => {
-                const message = {
-                    action: 'MESSAGE',
+                const body = {
+                    action: 'sendmessage',
                     payload: {
-                        message: 'Random message'
+                        username,
+                        message
                     },
                 };
 
-                ws.send(JSON.stringify(message));
+                ws.send(JSON.stringify(body));
+
+                messageInput.value = '';
             }
 
-            ws.onmessage = (e) => console.log(e)
+            const ws = new WebSocket('wss://6q1870d53m.execute-api.eu-west-2.amazonaws.com/ws_primary');
+
+            ws.onopen = () => console.log('opened');
+            ws.onclose = () => console.log('closed');
+            ws.onerror = (e) => console.error('error', e);
+            ws.onmessage = (e) => {
+                const { username, message } = JSON.parse(e.data);
+                if (username && message) {
+                    writeMessage(username, message);
+                }
+            }
         </script>
     </body>
 </html>
