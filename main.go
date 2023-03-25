@@ -18,7 +18,7 @@ import (
 // Inicialización de logs
 var Loggers, _ = zap.NewProduction()
 
-// Estructura para almacenar IDs de conexión en DynamoDB
+// Estructura para almacenar items en DynamoDB los cuales contienen los IDs de conexión
 type Connection struct {
 	ConnectionID string
 }
@@ -55,6 +55,7 @@ func handleRequest(request events.APIGatewayWebsocketProxyRequest) (events.APIGa
 	return response, nil
 }
 
+// Inserta en la tabla de DynamoDB el ID de conexión
 func doConnect(connectionID string) events.APIGatewayProxyResponse {
 	label := "doConnect: "
 	Loggers.Info(label + "connectionID: " + connectionID)
@@ -65,9 +66,10 @@ func doConnect(connectionID string) events.APIGatewayProxyResponse {
 		return events.APIGatewayProxyResponse{Body: "Failed establishing AWS session: " + err.Error(), StatusCode: 500}
 	}
 
-	dbSvc := dynamodb.New(newSession)
+	dynamoDB := dynamodb.New(newSession)
 
-	av, err := dynamodbattribute.MarshalMap(&Connection{ConnectionID: connectionID})
+	// Registro a insertar en la tabla de DynamoDB, en este caso tiene un solo campo: ConnectionID
+	dynamoItem, err := dynamodbattribute.MarshalMap(&Connection{ConnectionID: connectionID})
 
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Failed marshalling DynamoDB item: " + err.Error(), StatusCode: 500}
@@ -76,13 +78,14 @@ func doConnect(connectionID string) events.APIGatewayProxyResponse {
 	tableName := os.Getenv("DYNAMODB_TABLE")
 	Loggers.Info(label + "tableName: " + tableName)
 
-	_, err = dbSvc.PutItem(&dynamodb.PutItemInput{Item: av, TableName: aws.String(tableName)})
+	// Insert en la base de datos
+	_, err = dynamoDB.PutItem(&dynamodb.PutItemInput{Item: dynamoItem, TableName: aws.String(tableName)})
 
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Failed putting DynamoDB item in table '" + tableName + "': " + err.Error(), StatusCode: 500}
 	}
 
-	return events.APIGatewayProxyResponse{Body: connectionID, StatusCode: 200}
+	return events.APIGatewayProxyResponse{Body: "{}", StatusCode: 200}
 }
 
 func doSendMessage(body string) events.APIGatewayProxyResponse {
@@ -95,6 +98,7 @@ func doSendMessage(body string) events.APIGatewayProxyResponse {
 
 	msg := Body{}
 
+	// Leer el body (string con JSON) y meterlo en un objeto Body => Deserialización (aquí llamado Unmarshal)
 	err = json.Unmarshal([]byte(body), &msg)
 
 	if err != nil {
@@ -106,24 +110,27 @@ func doSendMessage(body string) events.APIGatewayProxyResponse {
 
 	endUrl := os.Getenv("API_GATEWAY_ENDPOINT")
 	tableName := os.Getenv("DYNAMODB_TABLE")
-	apiGw := apigatewaymanagementapi.New(newSession, aws.NewConfig().WithEndpoint(endUrl))
-	dbSvc := dynamodb.New(newSession)
 
-	result, err := dbSvc.Scan(&dynamodb.ScanInput{TableName: aws.String(tableName)})
+	// Este objeto permite hacer push a todos los usuarios conectados (todos los connectionIDs de la tabla)
+	apiGw := apigatewaymanagementapi.New(newSession, aws.NewConfig().WithEndpoint(endUrl))
+	dynamoDB := dynamodb.New(newSession)
+
+	// Recupera TODOS los connectionIDs de la tabla
+	allConnectionIDs, err := dynamoDB.Scan(&dynamodb.ScanInput{TableName: aws.String(tableName)})
 
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Failed scanning DynamoDB table '" + tableName + "': " + err.Error(), StatusCode: 500}
 	}
 
-	connectionIds := make([]Connection, *result.Count)
-	err = dynamodbattribute.UnmarshalListOfMaps(result.Items, &connectionIds)
+	connectionIds := make([]Connection, *allConnectionIDs.Count)
+	err = dynamodbattribute.UnmarshalListOfMaps(allConnectionIDs.Items, &connectionIds)
 
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Failed unmarshalling connection IDs: " + err.Error(), StatusCode: 500}
 	}
 
-	for _, c := range connectionIds {
-		Loggers.Info(label + "Posting to connection ID: " + c.ConnectionID)
+	for _, connection := range connectionIds {
+		Loggers.Info(label + "Posting to connection ID: " + connection.ConnectionID)
 
 		payload, err := json.Marshal(msg.Payload)
 
@@ -131,7 +138,7 @@ func doSendMessage(body string) events.APIGatewayProxyResponse {
 			return events.APIGatewayProxyResponse{Body: "Failed marshalling payload: " + err.Error(), StatusCode: 500}
 		}
 
-		_, err = apiGw.PostToConnection(&apigatewaymanagementapi.PostToConnectionInput{ConnectionId: &c.ConnectionID, Data: payload})
+		_, err = apiGw.PostToConnection(&apigatewaymanagementapi.PostToConnectionInput{ConnectionId: &connection.ConnectionID, Data: payload})
 
 		if err != nil {
 			// El error puede ser que el usuario se ha desconectado, en ese caso habría que eliminarlo
@@ -139,12 +146,12 @@ func doSendMessage(body string) events.APIGatewayProxyResponse {
 			answerError, ok := err.(awserr.Error)
 
 			if ok && answerError.Code() == apigatewaymanagementapi.ErrCodeGoneException {
-				err = deleteConnection(c.ConnectionID)
+				err = deleteConnection(connection.ConnectionID)
 				if err != nil {
-					return events.APIGatewayProxyResponse{Body: "Error deleting connection ID '" + c.ConnectionID + "' in DynamoDB: " + err.Error(), StatusCode: 500}
+					return events.APIGatewayProxyResponse{Body: "Error deleting connection ID '" + connection.ConnectionID + "' in DynamoDB: " + err.Error(), StatusCode: 500}
 				}
 			} else {
-				return events.APIGatewayProxyResponse{Body: "Error posting message to connection ID '" + c.ConnectionID + "'" + err.Error(), StatusCode: 500}
+				return events.APIGatewayProxyResponse{Body: "Error posting message to connection ID '" + connection.ConnectionID + "'" + err.Error(), StatusCode: 500}
 			}
 		}
 	}

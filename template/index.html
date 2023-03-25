@@ -9,6 +9,7 @@
     <body>
         <div>
             <input id="username-input" type="text" class="form-control input-sm" placeholder="User name" value="ericka"/>
+
             <input id="message-input"  type="text" class="form-control input-sm" placeholder="Message" />
             <button id="send-message">Send Message</button>
 
@@ -64,8 +65,8 @@
 
             const ws = new WebSocket('wss://6q1870d53m.execute-api.eu-west-2.amazonaws.com/ws_primary');
 
-            ws.onopen = () => console.log('opened');
-            ws.onclose = () => console.log('closed');
+            ws.onopen = (e) => console.log('opened', e);
+            ws.onclose = (e) => console.log('closed', e);
             ws.onerror = (e) => console.error('error', e);
             ws.onmessage = (e) => {
                 const { username, message } = JSON.parse(e.data);
