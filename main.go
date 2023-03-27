@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Inicialización de logs
+// Inicialización de logs zap
 var Loggers, _ = zap.NewProduction()
 
 // Estructura para almacenar items en DynamoDB los cuales contienen los IDs de conexión
@@ -28,6 +28,7 @@ type Payload struct {
 	Username string `json:"username"`
 	Message  string `json:"message"`
 }
+
 type Body struct {
 	Action  string  `json:"action"`
 	Payload Payload `json:"payload"`
@@ -184,7 +185,6 @@ func deleteConnection(connectionID string) error {
 		Key: map[string]*dynamodb.AttributeValue{
 			"ConnectionID": {S: aws.String(connectionID)},
 		},
-		// ReturnValues: aws.String("ALL_OLD"),
 		TableName: aws.String(tableName),
 	}
 	if _, err := dbSvc.DeleteItem(delIn); err != nil {
