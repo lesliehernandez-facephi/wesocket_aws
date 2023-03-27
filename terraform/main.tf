@@ -1,30 +1,28 @@
-# terraform {
-# required_providers {
-#     aws = {
-#       source  = "hashicorp/aws"
-#       version = "~> 4.16"
-#     }
-#   }
-# # 
-#   backend "s3" {
-#     bucket = "local-dm-tfstate"
-#     key    = "ws-chat/terraform.tfstate"
-#     region = var.aws_region
-#   }
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 4.53.0"
+    }
 
-#   required_version = ">= 1.3.6"
-# }
+  }
+  required_version = ">= 1.3.6"
+}
 
 provider aws {
   region = var.aws_region
-  # profile = var.profile
 }
 
+# ###################################################
+#                                                   #
+# las politicas de la lambda                        #
+#                                                   #
+####################################################
 
-# declaración permite que la función de Lambda cree grupos
-#  de registros, cree flujos de registros y transfiera eventos 
-#  de registro a CloudWatch Logs
+
+# creacion de politicas de permisos de IAM, para los recursos usados en la app Chat
 data "aws_iam_policy_document" "ws_lambda_policy_document" {
+  # es para permitir registrar los logs
   statement {
     actions = [
       "logs:CreateLogGroup",
@@ -35,8 +33,7 @@ data "aws_iam_policy_document" "ws_lambda_policy_document" {
     resources = ["arn:aws:logs:*:*:*"]
   }
 
-# permite que la función Lambda coloque elementos,
-#  elimine elementos y escanee el contenido de una tabla de Amazon DynamoDB
+# permite que la función Lambda que use dynamoDB
   statement {
     actions = [
       "dynamodb:PutItem",
@@ -47,7 +44,6 @@ data "aws_iam_policy_document" "ws_lambda_policy_document" {
     resources = [aws_dynamodb_table.ws_table.arn]
   }
 
-# declaración permite que la función Lambda ejecute API en API Gateway
   statement {
     actions = [
       "execute-api:*",
@@ -59,13 +55,14 @@ data "aws_iam_policy_document" "ws_lambda_policy_document" {
   }
 }
 
+# creacion de los permisos de IAM
 resource "aws_iam_policy" "ws_lambda_policy" {
   name   = "WsMessengerLambdaPolicy"
   path   = "/"
   policy = data.aws_iam_policy_document.ws_lambda_policy_document.json
 }
 
-
+# permite que apigateway invoque a la funcion lambda
 data  "aws_iam_policy_document" "ws_messeger_apigateway_policy" {
   statement {
     actions = [
@@ -77,30 +74,7 @@ data  "aws_iam_policy_document" "ws_messeger_apigateway_policy" {
 }
 
 
-# ##############################################################
-# Copilacion del codigo                                        #
-# en esta parte pondremos que se copile el codigo               
-# y se guarde en el zip, mediante terraform, sin necesidad de 
-# que nosotros tengamos que estar haciendolo manualmente, 
-# si no solo con el comando terraform apply se construye toda 
-# la infraestructura del codgio como el del despliegue
-# resource "null_resource" "compile" {
-#     trigger = {
-#         build_number = "${timestamp()}"
-#     }
-
-#     provider "local-exec" {
-#         command = "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o ./main -ldflags '-w' ./main.go"
-#     }
-# }
-
-
-# ###################################################
-#                                                   #
-# las politicas de la lambda                        #
-#                                                   #
-####################################################
-
+# se administa los roles de la funcion lambda
 resource "aws_iam_role" "examplego" {
   name               = "examplego"
   assume_role_policy = <<POLICY
@@ -118,16 +92,13 @@ resource "aws_iam_role" "examplego" {
   managed_policy_arns = [aws_iam_policy.ws_lambda_policy.arn]
 }
 
-# ##################################################
-#                                                  #
-# Se crea la funcion Lambda para                   #
-####################################################
 # resource "null_resource" "function_binary" {
 #   provisioner "local-exec" {
 #     command = "GOOS=linux GOARCH=amd64 go build -o ../main ../main.go"
 #   }
 # }
 
+# se genera el fichero zip del main
 data "archive_file" "zip" {    
     # depends_on = [null_resource.function_binary]
     type        = "zip"
@@ -135,7 +106,7 @@ data "archive_file" "zip" {
     output_path = "../main.zip"
 }
 
-
+# lambda funcion de nuestra aplicacion. 
 resource "aws_lambda_function" "ws_go_chat" {
     function_name     = "go_chat"
     runtime           = "go1.x"
@@ -155,13 +126,12 @@ resource "aws_lambda_function" "ws_go_chat" {
 }
 
 # Creamos unos logs, con aws_cloudwatch_log_group
-
 resource "aws_cloudwatch_log_group" "ws_messenger_logs" {
   name              = "/aws/lambda/${aws_lambda_function.ws_go_chat.function_name}"
   retention_in_days = 7
 }
 
-# # Allow the API Gateway to invoke Lambda function
+# es para dar permisos a la apigateway, para que invoque a la lambda funcion.
 resource "aws_lambda_permission" "ws_messenger_permission" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
@@ -170,12 +140,13 @@ resource "aws_lambda_permission" "ws_messenger_permission" {
   source_arn    = "${aws_apigatewayv2_api.websocket_go.execution_arn}/*/*"
 }
 
+# aqui se crea la tabla en dynamoDB
 resource "aws_dynamodb_table" "ws_table" {
   name           = "websocket-table"
+  hash_key       = "ConnectionID"
   billing_mode   = "PROVISIONED"
   read_capacity  = 2
   write_capacity = 2
-  hash_key       = "ConnectionID"
 
   attribute {
     name = "ConnectionID"

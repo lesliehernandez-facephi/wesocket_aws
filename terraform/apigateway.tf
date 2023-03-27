@@ -1,31 +1,9 @@
 # ##################################################
-#                                                  #
-# Aqui creamos un APIGATEWAY para la lambda  
-# loi que importa aqui en la palabra WEBSOCKET,
-# dentro de aqui hay varios enrutamientos
-# En esta expresion "$request.body.action", deciamos
-# que en el bodyde la peticion hay una action,
-# ahi es donde genera el enrutamiento
+# la aws_apigatewayv2_api es la que se encarga de recibir las peticiones de websocket
+# Aqui creamos un APIGATEWAY de tipo WEBSOCKET para la lambda  
+# En esta expresion "$request.body.action", esta expresion es una expresion de ruta JSON
+# que usa para enrutar las peticiones entrantes de la ruta WEBSOCKET.
 ####################################################
-
-# la aws_apigatewayv2_integration es para estar atento a los servicios que se solicita 
-resource "aws_apigatewayv2_integration" "lambda_main" {
-  api_id             = aws_apigatewayv2_api.websocket_go.id
-  integration_uri    = aws_lambda_function.ws_go_chat.invoke_arn
-  integration_type   = "AWS_PROXY"
-  integration_method = "POST"
-  content_handling_strategy = "CONVERT_TO_TEXT"
-  passthrough_behavior      = "WHEN_NO_MATCH"
-}
-
-
-##############################
-# # ahora vamos hacer una implementacion "real" 
-resource "aws_apigatewayv2_stage" "lambda_stage" {
-  api_id      = aws_apigatewayv2_api.websocket_go.id
-  name        = "ws_primary"
-  auto_deploy = true
-}
 
 resource "aws_apigatewayv2_api" "websocket_go" {
     name                       = "ws_messenger_api"
@@ -34,9 +12,28 @@ resource "aws_apigatewayv2_api" "websocket_go" {
     route_selection_expression = "$request.body.action"
 }
 
-# aqui se reenvia las solicitudes especiales ($connect, $disconnect)
+
+# es la que integra la APIGateway con la funcion lambda 
+resource "aws_apigatewayv2_integration" "lambda_main" {
+  api_id                    = aws_apigatewayv2_api.websocket_go.id
+  integration_uri           = aws_lambda_function.ws_go_chat.invoke_arn
+  integration_type          = "AWS_PROXY"
+  integration_method        = "POST"
+  content_handling_strategy = "CONVERT_TO_TEXT"
+  passthrough_behavior      = "WHEN_NO_MATCH"
+}
+
+
+# se encarga que se actualice o cree cualquier cambio que se haga en la aplicacion
+resource "aws_apigatewayv2_stage" "lambda_stage" {
+  api_id      = aws_apigatewayv2_api.websocket_go.id
+  name        = "ws_primary"
+  auto_deploy = true 
+}
+
+# aqui se reenvia las solicitudes especiales ($connect, $disconnect, dosendmessage)
 # para nuestra funcion lambda para poder administrar los estados de la lambda
-# serian las subrutas que tiene la apigatewayv2
+# serian las subrutas que tiene la apigatewayv2.
 resource "aws_apigatewayv2_route" "ws_connect" {
   api_id    = aws_apigatewayv2_api.websocket_go.id
   route_key = "$connect"
