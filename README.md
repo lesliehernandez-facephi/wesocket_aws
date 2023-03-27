@@ -1,5 +1,5 @@
-# Hola👋 #
-# Bienvendio al chat con Websocket con Lambdas. 🚀
+# Hola👋 
+ Bienvendio al chat con Websocket con Lambdas. 🚀 #
 # Escrito en golang y desplegado con terraform en AWS Lambdas 👨‍💻
 
   *  Hay que crear un ejecutable del main.go (funciona solo para LINUX o MAC)
