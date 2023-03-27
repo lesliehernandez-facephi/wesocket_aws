@@ -27,10 +27,11 @@
     wscat -c "RUTA"
     ```
   * Realizarlo por un terminal 
+
    ``` { "action": "sendmessage", "payload":{"username":"leslie", "message": "Aqui cualquier mensaje"} } ```
 
 # Finalmente para desplegarlo en la PC tienes que seguir estos pasos
-  1º terraform init
-  2º terraform apply
-  Dentro de aws, en el apartdado de apigateway, damos click en el nombre de la apigateway
+ * 1º terraform init
+ * 2º terraform apply
+ * Dentro de aws, en el apartdado de apigateway, damos click en el nombre de la apigateway
   una vez dentro nos metemos en el apartado etapas, nos metemos dentro y copiamos la URL pero que empeiza por ws://....
