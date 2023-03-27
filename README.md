@@ -5,7 +5,7 @@ Escrito en golang y desplegado con terraform en AWS Lambdas 👨‍💻
 # Hay que crear un ejecutable del main.go (funciona solo para LINUX o MAC)
 ** GOOS=linux GOARCH=amd64 go build -o main main.go **
 
-# Para generar el ejecutable main en Windows 
+# Para generar el ejecutable main en Windows
 ```
  $env:GOOS = "linux"
  $env:GOARCH = "amd64"
