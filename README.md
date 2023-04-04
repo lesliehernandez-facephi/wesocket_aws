@@ -25,7 +25,9 @@
    Previamente descargado, en 
     ```
     npm install -g wscat 
-    wscat -c "RUTA"
+    wscat -c wss://{YOUR-API-ID}.execute-api.{YOUR-REGION}.amazonaws.com/prod
+      connected (press CTRL+C to quit)
+    
     ```
   * Realizarlo por un terminal 
 

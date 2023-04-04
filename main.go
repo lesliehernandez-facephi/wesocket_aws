@@ -18,9 +18,16 @@ import (
 // Inicialización de logs zap
 var Loggers, _ = zap.NewProduction()
 
+// la creacion de un chat rpivado con uno o varios integrantes
+type ChatRoom struct {
+	RoomID string
+	Users  []string
+}
+
 // Estructura para almacenar items en DynamoDB los cuales contienen los IDs de conexión
 type Connection struct {
 	ConnectionID string
+	ChatID       string //es para id del chat privado
 }
 
 // Estructuras para enviar mensajes
@@ -31,6 +38,7 @@ type Payload struct {
 
 type Body struct {
 	Action  string  `json:"action"`
+	ChatID  string  `json:"chat_id"` //idetificar el chat privado al que se envia el mensaje
 	Payload Payload `json:"payload"`
 }
 
@@ -40,7 +48,7 @@ func handleRequest(request events.APIGatewayWebsocketProxyRequest) (events.APIGa
 	switch route := request.RequestContext.RouteKey; route {
 	case "$connect":
 		Loggers.Info("$connect ", zap.String("body: ", request.Body))
-		response = doConnect(request.RequestContext.ConnectionID)
+		response = doConnect(request.RequestContext.ConnectionID, request.Body)
 	case "sendmessage":
 		Loggers.Info("sendmessage", zap.String("body: ", request.Body))
 		response = doSendMessage(request.Body)
@@ -57,9 +65,17 @@ func handleRequest(request events.APIGatewayWebsocketProxyRequest) (events.APIGa
 }
 
 // Inserta en la tabla de DynamoDB el ID de conexión
-func doConnect(connectionID string) events.APIGatewayProxyResponse {
+func doConnect(connectionID, room string) events.APIGatewayProxyResponse {
 	label := "doConnect: "
 	Loggers.Info(label + "connectionID: " + connectionID)
+
+	var chatRoom string
+	eerr := json.Unmarshal([]byte(room), &chatRoom)
+	Loggers.Info(label + "connectionID: " + chatRoom)
+
+	if eerr != nil {
+		return events.APIGatewayProxyResponse{Body: "Invalid request body: " + eerr.Error(), StatusCode: 400}
+	}
 
 	newSession, err := session.NewSession()
 
@@ -69,8 +85,12 @@ func doConnect(connectionID string) events.APIGatewayProxyResponse {
 
 	dynamoDB := dynamodb.New(newSession)
 
-	// Registro a insertar en la tabla de DynamoDB, en este caso tiene un solo campo: ConnectionID
-	dynamoItem, err := dynamodbattribute.MarshalMap(&Connection{ConnectionID: connectionID})
+	// Registro a insertar en la tabla de DynamoDB, en este caso tiene un solo campo: ConnectionID, y el chat privado
+	connections := Connection{
+		ConnectionID: connectionID,
+		ChatID:       chatRoom,
+	}
+	dynamoItem, err := dynamodbattribute.MarshalMap(connections)
 
 	if err != nil {
 		return events.APIGatewayProxyResponse{Body: "Failed marshalling DynamoDB item: " + err.Error(), StatusCode: 500}
@@ -79,14 +99,19 @@ func doConnect(connectionID string) events.APIGatewayProxyResponse {
 	tableName := os.Getenv("DYNAMODB_TABLE")
 	Loggers.Info(label + "tableName: " + tableName)
 
-	// Insert en la base de datos
-	_, err = dynamoDB.PutItem(&dynamodb.PutItemInput{Item: dynamoItem, TableName: aws.String(tableName)})
-
-	if err != nil {
-		return events.APIGatewayProxyResponse{Body: "Failed putting DynamoDB item in table '" + tableName + "': " + err.Error(), StatusCode: 500}
+	inputTable := &dynamodb.PutItemInput{
+		Item:      dynamoItem,
+		TableName: aws.String(tableName),
 	}
 
-	return events.APIGatewayProxyResponse{Body: "{}", StatusCode: 200}
+	// Insert en la base de datos
+	_, err = dynamoDB.PutItem(inputTable)
+
+	if err != nil {
+		return events.APIGatewayProxyResponse{Body: "Failed to put item in DynamoDB: '" + tableName + "': " + err.Error(), StatusCode: 500}
+	}
+
+	return events.APIGatewayProxyResponse{Body: "Connected to chat room: " + chatRoom, StatusCode: 200}
 }
 
 func doSendMessage(body string) events.APIGatewayProxyResponse {
