@@ -4,9 +4,9 @@ import React from 'react';
 const Search = () => {
   return (
     <div className='search'>
-      <div className="searchForm">
+      {/* <div className="searchForm">
          <input type="text" placeholder='Buscar.....'/>
-      </div>
+      </div> */}
       <div className='userChat'>
         <img src="favicon.ico" alt=""/>
         <div className="userChatInfo">

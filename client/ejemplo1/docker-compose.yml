@@ -1,0 +1,11 @@
+version: '3.1'
+
+services:
+  chat-client:
+    image: httpd:2.4
+    hostname: chat-client
+    container_name: chat-client
+    volumes:
+      - ./wwwroot:/usr/local/apache2/htdocs/
+    ports:
+      - "8080:80"

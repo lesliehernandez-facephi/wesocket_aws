@@ -6,33 +6,11 @@ const ListChat = () => {
         <div className='userChat'>
             <img src="favicon.ico" alt=""/>
             <div className="userChatInfo">
-                <span>Janet JHONSSO</span>
+                <span>Janet Johnose</span>
                 <br/>
-                <br/>
-                <br/>
-                <br/>
-                <p>hellooo everybody!!!</p>
-            </div>
-        </div>
-        <div className='userChat'>
-            <img src="favicon.ico" alt=""/>
-            <div className="userChatInfo">
-                <span>Janet JHONSSO</span>
-                <p>hellooo everybody!!!</p>
-            </div>
-        </div>
-        <div className='userChat'>
-            <img src="favicon.ico" alt=""/>
-            <div className="userChatInfo">
-                <span>Janet JHONSSO</span>
-                <p>hellooo everybody!!!</p>
-            </div>
-        </div>
-        <div className='userChat'>
-            <img src="favicon.ico" alt=""/>
-            <div className="userChatInfo">
-                <span>Janet JHONSSO</span>
-                <p>hellooo everybody!!!</p>
+               
+                <span className="success" style={{color: "green"}}>Online</span>
+                   <span className="danger" style={{color: "red"}}>Offline</span>
             </div>
         </div>
     </div> 
